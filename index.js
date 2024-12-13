@@ -4017,7 +4017,12 @@ app.get('/upis', authenticateToken, authorizeAdmin, async (req, res) => {
         // Execute the query to fetch UPIs
         const result = await client.query(query, values);
         const upis = result.rows;
-
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        upis.forEach(upi => {
+            if (upi.image_name) { // Ensure image_name exists
+                upi.image_name = `${domainUrl}${upi.image_name}`;
+            }
+        });
         // Execute the query to get the total count of UPIs
         const countValues = searchTerm ? values.slice(0, -2) : []; // Use only searchTerm values for count query
         const countResult = await client.query(countQuery, countValues);
@@ -4043,7 +4048,15 @@ app.get('/upis/:upiId', authenticateToken, authorizeAdmin, async (req, res) => {
 
         // Check if the result contains a row
         if (result.rows.length === 1) {
-            res.json(result.rows[0]);
+            const upi = result.rows[0];
+
+            // Prepend the domain URL to the image_name field
+            const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+            if (upi.image_name) { // Ensure image_name exists
+                upi.image_name = `${domainUrl}${upi.image_name}`;
+            }
+
+            res.json(upi); // Send the modified UPI object
         } else {
             res.status(404).json({ error: 'UPI not found' });
         }
@@ -4149,6 +4162,10 @@ app.get('/companies/:company_id', async (req, res) => {
         client.release();
 
         if (result.rows.length === 1) {
+            const domainUrl = process.env.DOMAIN_URL;
+            result.rows.forEach(row => {
+                row.company_logo = `${domainUrl}${row.company_logo}`;
+            });
             res.json(result.rows);  // Send the result as an array of objects
         } else {
             res.status(404).json({ error: "Company not found" }); // Appropriate error message
@@ -4376,7 +4393,13 @@ app.get('/packages/:package_id', authenticateToken, authorizeAdmin, async (req, 
         const result = await client.query('SELECT * FROM packages WHERE package_id = $1', [package_id]);
 
         if (result.rowCount === 1) {  // In PostgreSQL, use rowCount to check the number of rows returned
-            res.json(result.rows[0]);  // Access the first row (if any)
+            const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+            const package = result.rows[0]; // Access the first row
+
+            // Prepend the domain URL to the package_image field
+            package.package_image = `${domainUrl}${package.package_image}`;
+
+            res.json(package);
         } else {
             res.status(404).json({ message: 'Package not found' });
         }
@@ -4407,6 +4430,10 @@ app.get('/packages', authenticateToken, async (req, res) => {
         query += ` ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
         const { rows: packages } = await client.query(query, params);
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        packages.forEach(pkg => {
+            pkg.package_image = `${domainUrl}${pkg.package_image}`;
+        });
         const countQuery = `SELECT COUNT(*) AS total FROM packages ${search ? `WHERE package_name ILIKE $1` : ''}`;
         const countResult = await client.query(countQuery, search ? [params[0]] : []);
         const totalPackages = parseInt(countResult.rows[0].total, 10);
@@ -8030,8 +8057,15 @@ app.get('/upi-details', authenticateToken, async (req, res) => {
         if (result.rows.length === 0) {
             return res.json({ message: 'No UPI details found for this user.' });
         }
+        const upiDetails = result.rows[0];
 
-        res.json(result.rows[0]);
+        // Prepend the domain URL to the image_name field
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        if (upiDetails.image_name) { // Ensure image_name exists
+            upiDetails.image_name = `${domainUrl}${upiDetails.image_name}`;
+        }
+
+        res.json(upiDetails);
     } catch (error) {
         console.error('Error fetching UPI details:', error);
         res.status(500).json({ error: 'Failed to fetch UPI details.' });
@@ -8517,7 +8551,15 @@ app.get('/upi-details/:userId', authenticateToken, authorizeAdmin, async (req, r
             return res.status(200).json({ upi_details: null, message: 'No UPI details found for this user.' });
         }
 
-        res.json(rows[0]);
+        const upiDetails = rows[0];
+
+        // Prepend the domain URL to the image_name field
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        if (upiDetails.image_name) { // Ensure image_name exists
+            upiDetails.image_name = `${domainUrl}${upiDetails.image_name}`;
+        }
+
+        res.json(upiDetails);
     } catch (error) {
         console.error('Error fetching UPI details:', error);
         res.status(500).json({ error: 'Failed to fetch UPI details.' });
@@ -9245,7 +9287,12 @@ app.get('/admin/download/payout-excel', authenticateToken, authorizeAdmin, async
         }
 
         const { rows: payoutData } = await client.query(query, queryParams);
-
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        payoutData.forEach(payout => {
+            if (payout.upi_image) { // Ensure upi_image exists
+                payout.upi_image = `${domainUrl}${payout.upi_image}`;
+            }
+        });
         // Prepare data for Excel sheet with all columns
         const worksheetData = payoutData.map((payout, index) => ({
             'S.NO': index + 1,
@@ -9355,6 +9402,13 @@ app.get('/admin/download/members-excel', authenticateToken, authorizeAdmin, asyn
         const paginatedMembers = members.map(member => {
             delete member.total_count;
             return member;
+        });
+
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        paginatedMembers.forEach(member => {
+            if (member.upi_image) { // Ensure upi_image exists
+                member.upi_image = `${domainUrl}${member.upi_image}`;
+            }
         });
 
         const worksheetData = paginatedMembers.map((member, index) => ({
@@ -9473,7 +9527,12 @@ app.get('/admin/download/members-pdf', authenticateToken, authorizeAdmin, async 
         if (members.length === 0) {
             return res.status(404).json({ message: 'No members found.' });
         }
-
+        const domainUrl = process.env.DOMAIN_URL; // Get the domain URL from .env
+        members.forEach(member => {
+            if (member.upi_image) { // Ensure upi_image exists
+                member.upi_image = `${domainUrl}${member.upi_image}`;
+            }
+        });
         const body = members.map((member, index) => [
             index + 1, // Dynamically compute the serial number
             member.user_id,
